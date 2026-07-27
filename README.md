@@ -1,5 +1,11 @@
 # SnowLuma.Docker.Framework
 
+
+
+https://snowluma.github.io/guide/deploy/docker.html
+
+
+
 SnowLuma 的 Linux Docker 运行框架，结构参考 `NapCat.Docker.Framework`：容器内安装 Linux QQ、Xvfb、VNC/noVNC、supervisord，并运行 SnowLuma 的 Node.js 发行产物。
 
 ## 支持平台
@@ -15,20 +21,119 @@ SnowLuma 的 Linux Docker 运行框架，结构参考 `NapCat.Docker.Framework`�
 - `3000`: OneBot HTTP 默认端口
 - `3001`: OneBot WebSocket 默认端口
 
+## 运行
+如果你要用你当前这个仓库、本地 vendor 来构建后再跑，先构建，再起 compose：
+
+- 先在项目创建一个 vendor 文件夹，然后 clone 一下 SnowLuma, noVNC 和 websockify
+- https://github.com/SnowLuma/SnowLuma
+- https://github.com/novnc/noVNC.git
+- https://github.com/novnc/websockify.git
+
+```shell
+PLATFORM=linux/arm64 ./scripts/build-image.sh
+SNOWLUMA_IMAGE=snowluma-docker-framework:latest VNC_PASSWD='你自己的VNC密码' docker compose up -d
+```
+
+如果你连 QQ 安装包也不想走外网，把它放到 vendor/qq/，文件名建议是：
+vendor/qq/linuxqq_3.2.31-51102_arm64.deb
+**首次启动顺序**
+
+- 起容器。
+- 浏览器打开 http://127.0.0.1:6081/，输入 VNC_PASSWD。
+- 在远程桌面里扫码登录 QQ。
+- 用上面那条 docker logs 命令取出 WebUI 初始密码。
+- 浏览器打开 http://127.0.0.1:5099/，用 admin + 初始密码 登录。
+- 在 WebUI 里确认 OneBot HTTP/WS 已启用，记下或修改 access token。
+
+
+
+### 怎么创建一个新的机器人逻辑应用来对接
+
+最简单的是写一个单独的 Node.js 应用，用官方 @snowluma/sdk 连 3001。官方 SDK 文档给的默认端点就是 ws://127.0.0.1:3001/ 或 http://127.0.0.1:3000/。
+最小示例：
+
+```shell
+mkdir my-bot && cd my-bot
+npm init -y
+npm i @snowluma/sdk
+```
+
+```javascript
+
+// index.mjs
+import { SnowLumaWebSocketClient, text } from '@snowluma/sdk';
+
+const bot = new SnowLumaWebSocketClient({
+  url: 'ws://127.0.0.1:3001/',
+  accessToken: process.env.SNOWLUMA_TOKEN,
+  reconnect: true,
+});
+
+bot.onGroupMessage(async (event, ctx) => {
+  if (event.raw_message === '/ping') {
+    await ctx.reply(text('pong'));
+  }
+});
+
+await bot.connect();
+```
+
+
+运行：
+
+```shell
+SNOWLUMA_TOKEN='你的OneBot token' node index.mjs
+```
+
+这就是一个新的“机器人逻辑应用”。SnowLuma 负责连 QQ 和暴露 OneBot；你的程序只负责业务逻辑。
+
+**如果你不想自己写 SDK，也可以走这 3 种对接方式**
+
+- 正向 WebSocket：你的程序主动连 ws://127.0.0.1:3001/。最适合机器人。
+- HTTP API：你的程序调 http://127.0.0.1:3000/。适合脚本式调用。
+- 反向 WS / HTTP 上报：在 config/onebot.json 里配 wsClients 或 httpClients，让 SnowLuma 主动连你的服务。
+
+**你这个仓库下，最实用的一套命令**
+
+```shell
+PLATFORM=linux/arm64 ./scripts/build-image.sh
+SNOWLUMA_IMAGE=snowluma-docker-framework:latest VNC_PASSWD='改成强密码' docker compose up -d
+docker logs snowluma 2>&1 | sed -nE 's/.*(临时密码: |initial credentials: user=admin password=)([^[:space:]]+).*/\2/p' | tail -n 1
+```
+
+然后打开：
+
+- http://127.0.0.1:6081/ 扫码登录 QQ
+- http://127.0.0.1:5099/ 登录 WebUI
+
+来源：
+
+- 官方 Docker 部署文档：https://snowluma.github.io/guide/deploy/docker.html
+- 官方配置文档：https://snowluma.github.io/guide/configuration.html
+- 官方 SDK 文档：https://snowluma.github.io/sdk/
+- 当前仓库 compose 文件：[docker-compose.yml](/Users/panda/github/SnowLuma.Docker.Framework/docker-compose.yml)
+
+
+
 ## 预编译产物
 
-这个 Docker 框架**不编译 SnowLuma 源码**，只消费 SnowLuma 主仓库 GitHub Release 上的预编译 `lite` tarball：
+这个 Docker 框架默认**不在容器内重新编译 SnowLuma 源码**，优先消费以下两种本地输入：
+
+- 仓库根目录的 `SnowLuma.Framework.tar.gz`
+- `vendor/SnowLuma`（其中至少要有 `dist/` 和 `packages/runtime/native/`）
+
+如果两者都没有，再按原来的工作流消费 SnowLuma 主仓库 GitHub Release 上的预编译 `lite` tarball：
 
 - `SnowLuma-<TAG>-linux-x64-lite.tar.gz`
 - `SnowLuma-<TAG>-linux-arm64-lite.tar.gz`
 
 镜像基础是 `node:22-bookworm-slim`（已自带 Node.js 运行时），所以挑 `lite` 版本，**不需要**带 `node` 二进制的完整版。
 
-构建时把对应架构的 tarball 重命名为 `SnowLuma.Framework.tar.gz` 放到仓库根目录，Dockerfile 会 `COPY` 进去并按 `dpkg --print-architecture` 校验当前架构的 native 文件齐全。CI 与 `scripts/build-image.sh` 都会自动用 `gh release download` 拉取，无需手动操作。
+构建时把对应架构的 tarball 重命名为 `SnowLuma.Framework.tar.gz` 放到仓库根目录，或直接把 SnowLuma 主仓库放到 `vendor/SnowLuma`。对 `vendor/SnowLuma` 模式，Dockerfile 会复用其中现成的 `dist/`，再按 `dpkg --print-architecture` 从 `packages/runtime/native/` 补齐当前架构的 Linux native 文件，所以 Apple 芯片本地构建也能直接产出 `linux/arm64` 镜像。CI 与 `scripts/build-image.sh` 在你设置 `SNOWLUMA_TAG` 时仍会自动用 `gh release download` 拉取 release 资产。
 
 ## 本地构建
 
-最简：从 SnowLuma release 自动下载并构建（默认 `linux/amd64`、`load` 到本地 Docker）：
+最简：从 SnowLuma release 自动下载并构建（默认跟随宿主机架构；Apple 芯片默认 `linux/arm64`，并 `load` 到本地 Docker）：
 
 ```bash
 SNOWLUMA_TAG=v1.6.35 ./scripts/build-image.sh
@@ -50,7 +155,28 @@ PLATFORM=linux/arm64 SNOWLUMA_TAG=v1.6.35 ./scripts/build-image.sh
 
 > Multi-arch manifest 的合并请走 CI（`.github/workflows/docker-image.yml`）— 本地脚本只支持单平台。
 
-如果你**手动准备** `SnowLuma.Framework.tar.gz` 放在仓库根目录，可以省略 `SNOWLUMA_TAG`，脚本会复用现有文件。
+如果你已经把 SnowLuma vendored 到 `vendor/SnowLuma`，或者**手动准备** `SnowLuma.Framework.tar.gz` 放在仓库根目录，可以省略 `SNOWLUMA_TAG`，脚本会优先复用本地文件。
+
+## 离线 / 半离线构建
+
+如果 GitHub / Docker Hub 访问不稳定，可以把这些依赖提前放到仓库里：
+
+- `vendor/SnowLuma`
+- `vendor/noVNC`
+- `vendor/websockify`
+- 可选：`vendor/qq/linuxqq_<QQ_VERSION>_<arch>.deb`
+
+当前 Dockerfile 会直接使用 `vendor/noVNC` 和 `vendor/websockify`，不再在线 `git clone`。`vendor/SnowLuma` 模式下也不再要求根目录存在 `SnowLuma.Framework.tar.gz`。
+
+Linux QQ 安装包如果你也想本地化，按下面任一名称放到 `vendor/qq/` 即可：
+
+- `linuxqq_<QQ_VERSION>_arm64.deb`
+- `linuxqq_<QQ_VERSION>_amd64.deb`
+- `linuxqq_arm64.deb`
+- `linuxqq_amd64.deb`
+- `linuxqq.deb`
+
+也可以通过 `--build-arg QQ_DEB_NAME=<文件名>` 指定自定义文件名。若本地没有找到，Dockerfile 才会回退到腾讯下载地址。
 
 ## CI 自动构建
 

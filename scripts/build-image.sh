@@ -2,7 +2,7 @@
 # Local helper: build the SnowLuma Docker image for one or more platforms.
 #
 # Examples:
-#   ./scripts/build-image.sh                          # load amd64 locally
+#   ./scripts/build-image.sh                          # load host-native platform locally
 #   SNOWLUMA_TAG=v1.6.35 ./scripts/build-image.sh     # auto-download release
 #   PUSH=1 PLATFORM=linux/arm64 SNOWLUMA_TAG=v1.6.35 ./scripts/build-image.sh
 #
@@ -17,20 +17,39 @@ PUSH="${PUSH:-0}"
 SNOWLUMA_REPO="${SNOWLUMA_REPO:-SnowLuma/SnowLuma}"
 SNOWLUMA_TAG="${SNOWLUMA_TAG:-}"
 ARTIFACT="${FRAMEWORK_DIR}/SnowLuma.Framework.tar.gz"
+VENDORED_SNOWLUMA_DIR="${FRAMEWORK_DIR}/vendor/SnowLuma"
+BUILD_CONTEXT="${FRAMEWORK_DIR}"
+TEMP_CONTEXT=""
+
+cleanup() {
+  if [ -n "${TEMP_CONTEXT}" ] && [ -d "${TEMP_CONTEXT}" ]; then
+    rm -rf "${TEMP_CONTEXT}"
+  fi
+}
+
+trap cleanup EXIT
+
+default_platform_for_host() {
+  case "$(uname -m)" in
+    arm64|aarch64) echo "linux/arm64" ;;
+    x86_64|amd64) echo "linux/amd64" ;;
+    *) echo "linux/amd64" ;;
+  esac
+}
 
 if [ "${PUSH}" = "1" ] || [ "${PUSH}" = "true" ]; then
-  PLATFORM="${PLATFORM:-linux/amd64}"
+  PLATFORM="${PLATFORM:-$(default_platform_for_host)}"
   OUTPUT="${OUTPUT:---push}"
 else
-  PLATFORM="${PLATFORM:-linux/amd64}"
+  PLATFORM="${PLATFORM:-$(default_platform_for_host)}"
   OUTPUT="${OUTPUT:---load}"
 fi
 
 # This local helper only supports single-platform builds — multi-arch
 # manifest creation is what CI is for. Users wanting multi-arch should
 # push a SnowLuma tag and let .github/workflows/docker-image.yml handle it.
-case ",${PLATFORM}," in
-  *,*,*) echo "PLATFORM must be a single value (linux/amd64 or linux/arm64); use CI for multi-arch." >&2; exit 1 ;;
+case "${PLATFORM}" in
+  *,*) echo "PLATFORM must be a single value (linux/amd64 or linux/arm64); use CI for multi-arch." >&2; exit 1 ;;
 esac
 
 case "${PLATFORM}" in
@@ -51,17 +70,41 @@ if [ -n "${SNOWLUMA_TAG}" ]; then
     --pattern "${asset}" \
     --output "${ARTIFACT}" \
     --clobber
-elif [ ! -f "${ARTIFACT}" ]; then
-  echo "Missing ${ARTIFACT}." >&2
-  echo "Either set SNOWLUMA_TAG=vX.Y.Z to auto-download, or place SnowLuma.Framework.tar.gz at the repo root." >&2
+fi
+
+if [ ! -d "${FRAMEWORK_DIR}/vendor/noVNC" ] || [ ! -d "${FRAMEWORK_DIR}/vendor/websockify" ]; then
+  echo "Missing vendored noVNC/websockify under ${FRAMEWORK_DIR}/vendor." >&2
   exit 1
+fi
+
+if [ -f "${ARTIFACT}" ]; then
+  TEMP_CONTEXT="$(mktemp -d "${TMPDIR:-/tmp}/snowluma-docker-context.XXXXXX")"
+  mkdir -p "${TEMP_CONTEXT}/vendor" "${TEMP_CONTEXT}/scripts"
+  cp "${FRAMEWORK_DIR}/Dockerfile" "${FRAMEWORK_DIR}/start.sh" "${FRAMEWORK_DIR}/supervisord.conf" "${TEMP_CONTEXT}/"
+  cp "${FRAMEWORK_DIR}/scripts/prepare-vendor-snowluma.sh" "${TEMP_CONTEXT}/scripts/"
+  cp -a "${FRAMEWORK_DIR}/vendor/noVNC" "${TEMP_CONTEXT}/vendor/noVNC"
+  cp -a "${FRAMEWORK_DIR}/vendor/websockify" "${TEMP_CONTEXT}/vendor/websockify"
+  if [ -d "${FRAMEWORK_DIR}/vendor/qq" ]; then
+    cp -a "${FRAMEWORK_DIR}/vendor/qq" "${TEMP_CONTEXT}/vendor/qq"
+  fi
+  mkdir -p "${TEMP_CONTEXT}/vendor/SnowLuma"
+  tar -xzf "${ARTIFACT}" -C "${TEMP_CONTEXT}/vendor/SnowLuma"
+  BUILD_CONTEXT="${TEMP_CONTEXT}"
+elif [ ! -f "${ARTIFACT}" ]; then
+  if [ -f "${VENDORED_SNOWLUMA_DIR}/dist/index.mjs" ] && [ -f "${VENDORED_SNOWLUMA_DIR}/packages/runtime/package.json" ]; then
+    echo "Using vendored SnowLuma sources from ${VENDORED_SNOWLUMA_DIR}"
+  else
+    echo "Missing ${ARTIFACT}." >&2
+    echo "Either set SNOWLUMA_TAG=vX.Y.Z to auto-download, place SnowLuma.Framework.tar.gz at the repo root, or vendor SnowLuma under vendor/SnowLuma." >&2
+    exit 1
+  fi
 fi
 
 docker buildx build \
   --platform "${PLATFORM}" \
   --tag "${IMAGE}" \
-  --file "${FRAMEWORK_DIR}/Dockerfile" \
+  --file "${BUILD_CONTEXT}/Dockerfile" \
   ${OUTPUT} \
-  "${FRAMEWORK_DIR}"
+  "${BUILD_CONTEXT}"
 
 echo "Built ${IMAGE} for ${PLATFORM}"

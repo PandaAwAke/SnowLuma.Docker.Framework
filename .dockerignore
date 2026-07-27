@@ -1,6 +1,5 @@
 .git
 .github
-artifacts
 *.log
 *.tmp
 node_modules
