@@ -22,14 +22,21 @@ services:
       - "${VNC_PORT:-5900}:5900"
       - "${NOVNC_PORT:-6081}:6081"
       - "${SNOWLUMA_WEBUI_HOST_PORT:-5099}:${SNOWLUMA_WEBUI_PORT:-5099}"
-      - "${ONEBOT_HTTP_PORT:-3000}:3000"
+      - "${ONEBOT_HTTP_PORT:-3002}:3000"
       - "${ONEBOT_WS_PORT:-3001}:3001"
     volumes:
       - snowluma-data:/app/snowluma-data
       - snowluma-qq-config:/app/.config
       - snowluma-qq-data:/app/.local/share
+    networks:
+      - snowluma-net
 
 volumes:
   snowluma-data:
   snowluma-qq-config:
   snowluma-qq-data:
+
+networks:
+  snowluma-net:
+    driver: bridge
+
