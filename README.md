@@ -29,6 +29,11 @@ SnowLuma 的 Linux Docker 运行框架，结构参考 `NapCat.Docker.Framework`�
 - https://github.com/novnc/noVNC.git
 - https://github.com/novnc/websockify.git
 
+也可以：
+```shell
+FORCE=1 ./scripts/clone-vendors.sh
+```
+
 ```shell
 PLATFORM=linux/arm64 ./scripts/build-image.sh
 SNOWLUMA_IMAGE=snowluma-docker-framework:latest VNC_PASSWD='你自己的VNC密码' docker compose up -d
@@ -97,6 +102,8 @@ SNOWLUMA_TOKEN='你的OneBot token' node index.mjs
 
 ```shell
 PLATFORM=linux/arm64 ./scripts/build-image.sh
+或者
+PLATFORM=linux/amd64 ./scripts/build-image.sh
 SNOWLUMA_IMAGE=snowluma-docker-framework:latest VNC_PASSWD='改成强密码' docker compose up -d
 docker logs snowluma 2>&1 | sed -nE 's/.*(临时密码: |initial credentials: user=admin password=)([^[:space:]]+).*/\2/p' | tail -n 1
 ```
@@ -117,19 +124,16 @@ docker logs snowluma 2>&1 | sed -nE 's/.*(临时密码: |initial credentials: us
 
 ## 预编译产物
 
-这个 Docker 框架默认**不在容器内重新编译 SnowLuma 源码**，优先消费以下两种本地输入：
+这个 Docker 框架默认**不在容器内重新编译 SnowLuma 源码**，优先直接消费 `vendor/SnowLuma`（其中至少要有 `dist/` 和 `packages/runtime/native/`）。
 
-- 仓库根目录的 `SnowLuma.Framework.tar.gz`
-- `vendor/SnowLuma`（其中至少要有 `dist/` 和 `packages/runtime/native/`）
-
-如果两者都没有，再按原来的工作流消费 SnowLuma 主仓库 GitHub Release 上的预编译 `lite` tarball：
+如果你显式设置 `SNOWLUMA_TAG`，脚本会临时下载 SnowLuma 主仓库 GitHub Release 上的预编译 `lite` tarball 到系统临时目录，再作为本次构建输入：
 
 - `SnowLuma-<TAG>-linux-x64-lite.tar.gz`
 - `SnowLuma-<TAG>-linux-arm64-lite.tar.gz`
 
 镜像基础是 `node:22-bookworm-slim`（已自带 Node.js 运行时），所以挑 `lite` 版本，**不需要**带 `node` 二进制的完整版。
 
-构建时把对应架构的 tarball 重命名为 `SnowLuma.Framework.tar.gz` 放到仓库根目录，或直接把 SnowLuma 主仓库放到 `vendor/SnowLuma`。对 `vendor/SnowLuma` 模式，Dockerfile 会复用其中现成的 `dist/`，再按 `dpkg --print-architecture` 从 `packages/runtime/native/` 补齐当前架构的 Linux native 文件，所以 Apple 芯片本地构建也能直接产出 `linux/arm64` 镜像。CI 与 `scripts/build-image.sh` 在你设置 `SNOWLUMA_TAG` 时仍会自动用 `gh release download` 拉取 release 资产。
+把 SnowLuma 主仓库放到 `vendor/SnowLuma` 后，Dockerfile 会复用其中现成的 `dist/`，再按 `dpkg --print-architecture` 从 `packages/runtime/native/` 补齐当前架构的 Linux native 文件，所以 Apple 芯片本地构建也能直接产出 `linux/arm64` 镜像。CI 与 `scripts/build-image.sh` 在你设置 `SNOWLUMA_TAG` 时仍会自动用 `gh release download` 拉取 release 资产，但不会再要求项目根目录存在 `SnowLuma.Framework.tar.gz`。
 
 ## 本地构建
 
@@ -155,7 +159,7 @@ PLATFORM=linux/arm64 SNOWLUMA_TAG=v1.6.35 ./scripts/build-image.sh
 
 > Multi-arch manifest 的合并请走 CI（`.github/workflows/docker-image.yml`）— 本地脚本只支持单平台。
 
-如果你已经把 SnowLuma vendored 到 `vendor/SnowLuma`，或者**手动准备** `SnowLuma.Framework.tar.gz` 放在仓库根目录，可以省略 `SNOWLUMA_TAG`，脚本会优先复用本地文件。
+如果你已经把 SnowLuma vendored 到 `vendor/SnowLuma`，可以直接省略 `SNOWLUMA_TAG`。脚本默认优先走本地 vendor。
 
 ## 离线 / 半离线构建
 
