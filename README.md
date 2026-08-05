@@ -132,7 +132,7 @@ docker logs snowluma 2>&1 | sed -nE 's/.*(临时密码: |initial credentials: us
 - `packages/runtime/package.json`
 - `packages/runtime/native/`
 
-如果你只是 `git clone` 了 SnowLuma 主仓库，通常会缺少 `dist/`，因为上游源码仓库默认不提交构建产物。此时 `scripts/build-image.sh` 会自动根据 `vendor/SnowLuma/package.json` 里的版本号，临时下载匹配的 SnowLuma lite runtime release，再继续构建。
+如果你只是 `git clone` 了 SnowLuma 主仓库，通常会缺少 `dist/`，因为上游源码仓库默认不提交构建产物。此时 `scripts/build-image.sh` 会自动根据 `vendor/SnowLuma/package.json` 里的版本号，下载匹配的 SnowLuma lite runtime release，并缓存到 `artifacts/runtime/`，后续构建重复复用。
 
 Dockerfile 会复用现成的 `dist/`，再按 `dpkg --print-architecture` 从 `packages/runtime/native/` 补齐当前架构的 Linux native 文件，所以 Apple 芯片本地构建也能直接产出 `linux/arm64` 镜像。
 

@@ -22,6 +22,7 @@ BUILD_CONTEXT="${FRAMEWORK_DIR}"
 TEMP_CONTEXT=""
 DOWNLOAD_DIR=""
 RELEASE_ARTIFACT=""
+RUNTIME_CACHE_DIR="${FRAMEWORK_DIR}/artifacts/runtime"
 
 default_platform_for_host() {
   case "$(uname -m)" in
@@ -98,11 +99,20 @@ download_release_runtime() {
     exit 1
   fi
 
-  DOWNLOAD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/snowluma-release.XXXXXX")"
-  RELEASE_ARTIFACT="${DOWNLOAD_DIR}/${asset}"
+  mkdir -p "${RUNTIME_CACHE_DIR}"
+  RELEASE_ARTIFACT="${RUNTIME_CACHE_DIR}/${asset}"
 
-  echo "vendor/SnowLuma lacks dist/. Auto-fetching ${asset} from ${url}"
-  curl -L --fail --output "${RELEASE_ARTIFACT}" "${url}"
+  if [ -f "${RELEASE_ARTIFACT}" ]; then
+    echo "vendor/SnowLuma lacks dist/. Reusing cached runtime ${RELEASE_ARTIFACT}"
+  else
+    if [ -d "${DOWNLOAD_DIR}" ]; then
+      rm -rf "${DOWNLOAD_DIR}"
+    fi
+    DOWNLOAD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/snowluma-release.XXXXXX")"
+    echo "vendor/SnowLuma lacks dist/. Auto-fetching ${asset} from ${url}"
+    curl -L --fail --output "${DOWNLOAD_DIR}/${asset}" "${url}"
+    mv "${DOWNLOAD_DIR}/${asset}" "${RELEASE_ARTIFACT}"
+  fi
 
   prepare_temp_context
   mkdir -p "${TEMP_CONTEXT}/vendor/SnowLuma"
