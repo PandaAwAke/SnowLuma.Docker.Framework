@@ -124,42 +124,42 @@ docker logs snowluma 2>&1 | sed -nE 's/.*(临时密码: |initial credentials: us
 
 ## 预编译产物
 
-这个 Docker 框架默认**不在容器内重新编译 SnowLuma 源码**，优先直接消费 `vendor/SnowLuma`（其中至少要有 `dist/` 和 `packages/runtime/native/`）。
+这个 Docker 框架默认**不在容器内重新编译 SnowLuma 源码**，只直接消费 `vendor/SnowLuma`。
 
-如果你显式设置 `SNOWLUMA_TAG`，脚本会临时下载 SnowLuma 主仓库 GitHub Release 上的预编译 `lite` tarball 到系统临时目录，再作为本次构建输入：
+`vendor/SnowLuma` 需要至少包含：
 
-- `SnowLuma-<TAG>-linux-x64-lite.tar.gz`
-- `SnowLuma-<TAG>-linux-arm64-lite.tar.gz`
+- `dist/`
+- `packages/runtime/package.json`
+- `packages/runtime/native/`
 
-镜像基础是 `node:22-bookworm-slim`（已自带 Node.js 运行时），所以挑 `lite` 版本，**不需要**带 `node` 二进制的完整版。
-
-把 SnowLuma 主仓库放到 `vendor/SnowLuma` 后，Dockerfile 会复用其中现成的 `dist/`，再按 `dpkg --print-architecture` 从 `packages/runtime/native/` 补齐当前架构的 Linux native 文件，所以 Apple 芯片本地构建也能直接产出 `linux/arm64` 镜像。CI 与 `scripts/build-image.sh` 在你设置 `SNOWLUMA_TAG` 时仍会自动用 `gh release download` 拉取 release 资产，但不会再要求项目根目录存在 `SnowLuma.Framework.tar.gz`。
+Dockerfile 会复用其中现成的 `dist/`，再按 `dpkg --print-architecture` 从 `packages/runtime/native/` 补齐当前架构的 Linux native 文件，所以 Apple 芯片本地构建也能直接产出 `linux/arm64` 镜像。
 
 ## 本地构建
 
-最简：从 SnowLuma release 自动下载并构建（默认跟随宿主机架构；Apple 芯片默认 `linux/arm64`，并 `load` 到本地 Docker）：
+最简：直接使用 vendored 源码构建（默认跟随宿主机架构；Apple 芯片默认 `linux/arm64`，并 `load` 到本地 Docker）：
 
 ```bash
-SNOWLUMA_TAG=v1.6.35 ./scripts/build-image.sh
+./scripts/clone-vendors.sh
+./scripts/build-image.sh
 ```
 
-需要本机已装 [`gh` CLI](https://cli.github.com/)（用于下载 release 资产）以及 Docker buildx。
+需要本机已装 Docker buildx。
 
 构建并推送到镜像仓库：
 
 ```bash
-IMAGE=motricseven7/snowluma:v1.6.35 PUSH=1 SNOWLUMA_TAG=v1.6.35 ./scripts/build-image.sh
+IMAGE=motricseven7/snowluma:v1.6.35 PUSH=1 PLATFORM=linux/arm64 ./scripts/build-image.sh
 ```
 
 切换架构：
 
 ```bash
-PLATFORM=linux/arm64 SNOWLUMA_TAG=v1.6.35 ./scripts/build-image.sh
+PLATFORM=linux/arm64 ./scripts/build-image.sh
 ```
 
 > Multi-arch manifest 的合并请走 CI（`.github/workflows/docker-image.yml`）— 本地脚本只支持单平台。
 
-如果你已经把 SnowLuma vendored 到 `vendor/SnowLuma`，可以直接省略 `SNOWLUMA_TAG`。脚本默认优先走本地 vendor。
+如果你已经把 3 个仓库 vendored 到 `vendor/`，`build-image.sh` 不再依赖任何额外 tar 包。
 
 ## 离线 / 半离线构建
 
@@ -170,7 +170,7 @@ PLATFORM=linux/arm64 SNOWLUMA_TAG=v1.6.35 ./scripts/build-image.sh
 - `vendor/websockify`
 - 可选：`vendor/qq/linuxqq_<QQ_VERSION>_<arch>.deb`
 
-当前 Dockerfile 会直接使用 `vendor/noVNC` 和 `vendor/websockify`，不再在线 `git clone`。`vendor/SnowLuma` 模式下也不再要求根目录存在 `SnowLuma.Framework.tar.gz`。
+当前 Dockerfile 会直接使用 `vendor/SnowLuma`、`vendor/noVNC` 和 `vendor/websockify`，不再在线 `git clone`，也不再要求额外的 `SnowLuma.Framework.tar.gz`。
 
 Linux QQ 安装包如果你也想本地化，按下面任一名称放到 `vendor/qq/` 即可：
 

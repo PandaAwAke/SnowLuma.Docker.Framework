@@ -20,7 +20,6 @@ case "${dpkg_arch}" in
 esac
 
 if [ -f "${src_root}/dist/index.mjs" ] && [ -d "${src_root}/packages/runtime" ]; then
-  layout="vendor"
   dist_dir="${src_root}/dist"
   runtime_dir="${src_root}/packages/runtime"
   native_dir="${runtime_dir}/native"
@@ -40,25 +39,6 @@ if [ -f "${src_root}/dist/index.mjs" ] && [ -d "${src_root}/packages/runtime" ];
       exit 1
     fi
   done
-elif [ -f "${src_root}/index.mjs" ] && [ -d "${src_root}/native" ]; then
-  layout="release"
-  dist_dir="${src_root}"
-
-  for required in \
-    "${dist_dir}/index.mjs" \
-    "${dist_dir}/client/index.html" \
-    "${dist_dir}/package.json" \
-    "${dist_dir}/launcher.sh" \
-    "${dist_dir}/native/snowluma-linux-${native_arch}.node" \
-    "${dist_dir}/native/snowluma-linux-${native_arch}.so" \
-    "${dist_dir}/native/websocket-linux-${native_arch}.node" \
-    "${dist_dir}/native/ffmpeg/ffmpegAddon.linux.${native_arch}.node"
-  do
-    if [ ! -f "${required}" ]; then
-      echo "Missing required SnowLuma release file: ${required}" >&2
-      exit 1
-    fi
-  done
 else
   echo "Unsupported SnowLuma layout under ${src_root}" >&2
   exit 1
@@ -68,16 +48,13 @@ rm -rf "${out_dir}"
 mkdir -p "${out_dir}/native/ffmpeg"
 
 cp -a "${dist_dir}/." "${out_dir}/"
-
-if [ "${layout}" = "vendor" ]; then
-  rm -f "${out_dir}"/native/snowluma-linux-*.node
-  rm -f "${out_dir}"/native/snowluma-linux-*.so
-  rm -f "${out_dir}"/native/websocket-linux-*.node
-  rm -f "${out_dir}"/native/ffmpeg/ffmpegAddon.linux.*.node
-  cp "${runtime_dir}/package.json" "${out_dir}/package.json"
-  cp "${runtime_dir}/launcher.sh" "${out_dir}/launcher.sh"
-  cp "${native_dir}/snowluma-linux-${native_arch}.node" "${out_dir}/native/"
-  cp "${native_dir}/snowluma-linux-${native_arch}.so" "${out_dir}/native/"
-  cp "${native_dir}/websocket-linux-${native_arch}.node" "${out_dir}/native/"
-  cp "${native_dir}/ffmpeg/ffmpegAddon.linux.${native_arch}.node" "${out_dir}/native/ffmpeg/"
-fi
+rm -f "${out_dir}"/native/snowluma-linux-*.node
+rm -f "${out_dir}"/native/snowluma-linux-*.so
+rm -f "${out_dir}"/native/websocket-linux-*.node
+rm -f "${out_dir}"/native/ffmpeg/ffmpegAddon.linux.*.node
+cp "${runtime_dir}/package.json" "${out_dir}/package.json"
+cp "${runtime_dir}/launcher.sh" "${out_dir}/launcher.sh"
+cp "${native_dir}/snowluma-linux-${native_arch}.node" "${out_dir}/native/"
+cp "${native_dir}/snowluma-linux-${native_arch}.so" "${out_dir}/native/"
+cp "${native_dir}/websocket-linux-${native_arch}.node" "${out_dir}/native/"
+cp "${native_dir}/ffmpeg/ffmpegAddon.linux.${native_arch}.node" "${out_dir}/native/ffmpeg/"
