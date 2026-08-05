@@ -124,7 +124,7 @@ docker logs snowluma 2>&1 | sed -nE 's/.*(临时密码: |initial credentials: us
 
 ## 预编译产物
 
-这个 Docker 框架默认**不在容器内重新编译 SnowLuma 源码**，只直接消费 `vendor/SnowLuma`。
+这个 Docker 框架默认**不在容器内重新编译 SnowLuma 源码**，直接消费 `vendor/SnowLuma`。
 
 `vendor/SnowLuma` 需要至少包含：
 
@@ -132,7 +132,9 @@ docker logs snowluma 2>&1 | sed -nE 's/.*(临时密码: |initial credentials: us
 - `packages/runtime/package.json`
 - `packages/runtime/native/`
 
-Dockerfile 会复用其中现成的 `dist/`，再按 `dpkg --print-architecture` 从 `packages/runtime/native/` 补齐当前架构的 Linux native 文件，所以 Apple 芯片本地构建也能直接产出 `linux/arm64` 镜像。
+如果你只是 `git clone` 了 SnowLuma 主仓库，通常会缺少 `dist/`，因为上游源码仓库默认不提交构建产物。此时 `scripts/build-image.sh` 会自动根据 `vendor/SnowLuma/package.json` 里的版本号，临时下载匹配的 SnowLuma lite runtime release，再继续构建。
+
+Dockerfile 会复用现成的 `dist/`，再按 `dpkg --print-architecture` 从 `packages/runtime/native/` 补齐当前架构的 Linux native 文件，所以 Apple 芯片本地构建也能直接产出 `linux/arm64` 镜像。
 
 ## 本地构建
 
@@ -143,7 +145,7 @@ Dockerfile 会复用其中现成的 `dist/`，再按 `dpkg --print-architecture`
 ./scripts/build-image.sh
 ```
 
-需要本机已装 Docker buildx。
+需要本机已装 Docker buildx。若 `vendor/SnowLuma` 缺少 `dist/`，还需要能访问 GitHub Release 下载对应 runtime。
 
 构建并推送到镜像仓库：
 
@@ -159,7 +161,7 @@ PLATFORM=linux/arm64 ./scripts/build-image.sh
 
 > Multi-arch manifest 的合并请走 CI（`.github/workflows/docker-image.yml`）— 本地脚本只支持单平台。
 
-如果你已经把 3 个仓库 vendored 到 `vendor/`，`build-image.sh` 不再依赖任何额外 tar 包。
+如果你已经把 3 个仓库 vendored 到 `vendor/`，`build-image.sh` 不再依赖任何额外 tar 包。若 `vendor/SnowLuma` 只有源码、没有 `dist/`，脚本会自动补 runtime。
 
 ## 离线 / 半离线构建
 
@@ -170,7 +172,7 @@ PLATFORM=linux/arm64 ./scripts/build-image.sh
 - `vendor/websockify`
 - 可选：`vendor/qq/linuxqq_<QQ_VERSION>_<arch>.deb`
 
-当前 Dockerfile 会直接使用 `vendor/SnowLuma`、`vendor/noVNC` 和 `vendor/websockify`，不再在线 `git clone`，也不再要求额外的 `SnowLuma.Framework.tar.gz`。
+当前 Dockerfile 会直接使用 `vendor/SnowLuma`、`vendor/noVNC` 和 `vendor/websockify`，不再在线 `git clone`，也不再要求额外的 `SnowLuma.Framework.tar.gz`。如果 `vendor/SnowLuma` 里缺少 `dist/`，由 `build-image.sh` 在构建前自动补齐。
 
 Linux QQ 安装包如果你也想本地化，按下面任一名称放到 `vendor/qq/` 即可：
 
