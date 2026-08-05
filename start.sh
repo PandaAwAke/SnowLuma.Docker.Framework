@@ -7,6 +7,7 @@ set -euo pipefail
 : "${SNOWLUMA_HOME:=/app/snowluma}"
 : "${SNOWLUMA_DATA:=/app/snowluma-data}"
 : "${SNOWLUMA_WEBUI_PORT:=5099}"
+: "${SNOWLUMA_WEBUI_HOST:=0.0.0.0}"
 : "${SNOWLUMA_LOG_LEVEL:=info}"
 : "${SNOWLUMA_SCREEN:=1920x1080x24}"
 : "${SNOWLUMA_HOOK_AUTOLOAD:=1}"
@@ -145,9 +146,11 @@ const dataDir = process.env.SNOWLUMA_DATA || '/app/snowluma-data';
 const configDir = path.join(dataDir, 'config');
 const runtimeConfigPath = path.join(configDir, 'runtime.json');
 const requestedPort = Number(process.env.SNOWLUMA_WEBUI_PORT || 5099);
+const requestedHost = String(process.env.SNOWLUMA_WEBUI_HOST || '0.0.0.0').trim();
 const webuiPort = Number.isInteger(requestedPort) && requestedPort > 0 && requestedPort <= 65535
   ? requestedPort
   : 5099;
+const webuiHost = requestedHost || '0.0.0.0';
 
 fs.mkdirSync(configDir, { recursive: true });
 
@@ -159,6 +162,7 @@ try {
 }
 
 runtimeConfig.webuiPort = webuiPort;
+runtimeConfig.webuiHost = webuiHost;
 fs.writeFileSync(runtimeConfigPath, `${JSON.stringify(runtimeConfig, null, 2)}\n`, 'utf8');
 NODE
 # Node.js block above ran as root, so runtime.json is owned by root.

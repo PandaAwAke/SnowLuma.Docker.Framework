@@ -20,6 +20,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     SNOWLUMA_HOME=/app/snowluma \
     SNOWLUMA_DATA=/app/snowluma-data \
     SNOWLUMA_WEBUI_PORT=5099 \
+    SNOWLUMA_WEBUI_HOST=0.0.0.0 \
     SNOWLUMA_UID=1000 \
     SNOWLUMA_GID=1000 \
     SNOWLUMA_LOG_LEVEL=info \
